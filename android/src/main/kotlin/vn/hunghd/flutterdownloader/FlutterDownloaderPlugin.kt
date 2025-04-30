@@ -92,7 +92,9 @@ class FlutterDownloaderPlugin : MethodChannel.MethodCallHandler, FlutterPlugin {
         requiresStorageNotLow: Boolean,
         saveInPublicStorage: Boolean,
         timeout: Int,
-        allowCellular: Boolean
+        allowCellular: Boolean,
+        method: String = "GET",
+        postBody: String? = null
     ): WorkRequest {
         return OneTimeWorkRequest.Builder(DownloadWorker::class.java)
             .setConstraints(
@@ -124,6 +126,8 @@ class FlutterDownloaderPlugin : MethodChannel.MethodCallHandler, FlutterPlugin {
                         saveInPublicStorage
                     )
                     .putInt(DownloadWorker.ARG_TIMEOUT, timeout)
+                    .putString(DownloadWorker.ARG_METHOD, method)    // <-- Added this
+                    .putString(DownloadWorker.ARG_POST_BODY, postBody)
                     .build()
             )
             .build()
@@ -170,6 +174,8 @@ class FlutterDownloaderPlugin : MethodChannel.MethodCallHandler, FlutterPlugin {
         val requiresStorageNotLow: Boolean = call.requireArgument("requires_storage_not_low")
         val saveInPublicStorage: Boolean = call.requireArgument("save_in_public_storage")
         val allowCellular: Boolean = call.requireArgument("allow_cellular")
+        val method: String = call.argument<String>("method") ?: "GET"
+        val postBody: String? = call.argument<String>("body")
         val request: WorkRequest = buildRequest(
             url,
             savedDir,
@@ -181,7 +187,9 @@ class FlutterDownloaderPlugin : MethodChannel.MethodCallHandler, FlutterPlugin {
             requiresStorageNotLow,
             saveInPublicStorage,
             timeout,
-            allowCellular = allowCellular
+            allowCellular = allowCellular,
+            method,
+            postBody
         )
         WorkManager.getInstance(requireContext()).enqueue(request)
         val taskId: String = request.id.toString()

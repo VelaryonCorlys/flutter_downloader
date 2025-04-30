@@ -24,6 +24,8 @@
 #define KEY_OPEN_FILE_FROM_NOTIFICATION @"open_file_from_notification"
 #define KEY_QUERY @"query"
 #define KEY_TIME_CREATED @"time_created"
+#define KEY_METHOD @"method"
+#define KEY_BODY @"body"
 
 #define NULL_VALUE @"<null>"
 
@@ -160,9 +162,17 @@ static NSMutableDictionary<NSString*, NSMutableDictionary*> *_runningTaskById = 
     return _session;
 }
 
-- (NSURLSessionDownloadTask*)downloadTaskWithURL: (NSURL*) url fileName: (NSString*) fileName andSavedDir: (NSString*) savedDir andHeaders: (NSString*) headers
+- (NSURLSessionDownloadTask*)downloadTaskWithURL: (NSURL*) url
+                                        fileName: (NSString*) fileName
+                                     andSavedDir: (NSString*) savedDir
+                                      andHeaders: (NSString*) headers
+                                      httpMethod:(NSString *)method
+                                        postBody:(NSString *)postBody
 {
     NSMutableURLRequest *request = [[NSMutableURLRequest alloc] initWithURL:url];
+    if (method != nil) {
+        request.HTTPMethod = method;
+    }
     if (headers != nil && [headers length] > 0) {
         NSError *jsonError;
         NSData *data = [headers dataUsingEncoding:NSUTF8StringEncoding];
@@ -176,6 +186,11 @@ static NSMutableDictionary<NSString*, NSMutableDictionary*> *_runningTaskById = 
             [request setValue:value forHTTPHeaderField:key];
         }
     }
+    if ([method isEqualToString:@"POST"] && postBody != nil) {
+            NSData *bodyData = [postBody dataUsingEncoding:NSUTF8StringEncoding];
+            request.HTTPBody = bodyData;
+    }
+    
     NSURLSessionDownloadTask *task = [[self currentSession] downloadTaskWithRequest:request];
     // store task id in taskDescription
     task.taskDescription = [self createTaskId];
@@ -722,8 +737,16 @@ static NSMutableDictionary<NSString*, NSMutableDictionary*> *_runningTaskById = 
     NSString *headers = call.arguments[KEY_HEADERS];
     NSNumber *showNotification = call.arguments[KEY_SHOW_NOTIFICATION];
     NSNumber *openFileFromNotification = call.arguments[KEY_OPEN_FILE_FROM_NOTIFICATION];
+    NSString *httpMethod = [call.arguments[KEY_METHOD] isKindOfClass:[NSNull class]] ? nil : call.arguments[KEY_METHOD];
+    NSString *postBody = [call.arguments[KEY_BODY] isKindOfClass:[NSNull class]] ? nil : call.arguments[KEY_BODY];
     
-    NSURLSessionDownloadTask *task = [self downloadTaskWithURL:[NSURL URLWithString:urlString] fileName:fileName andSavedDir:savedDir andHeaders:headers];
+    NSURLSessionDownloadTask *task = [self downloadTaskWithURL:[NSURL URLWithString:urlString]
+                                                      fileName:fileName
+                                                   andSavedDir:savedDir
+                                                    andHeaders:headers
+                                                    httpMethod:httpMethod
+                                                      postBody:postBody
+    ];
     
     NSString *taskId = [self identifierForTask:task];
     
@@ -843,8 +866,10 @@ static NSMutableDictionary<NSString*, NSMutableDictionary*> *_runningTaskById = 
             NSString *savedDir = taskDict[KEY_SAVED_DIR];
             NSString *fileName = taskDict[KEY_FILE_NAME];
             NSString *headers = taskDict[KEY_HEADERS];
+            NSString *method = taskDict[KEY_METHOD];
+            NSString *body = taskDict[KEY_BODY];
 
-            NSURLSessionDownloadTask *newTask = [self downloadTaskWithURL:[NSURL URLWithString:urlString] fileName:fileName andSavedDir:savedDir andHeaders:headers];
+            NSURLSessionDownloadTask *newTask = [self downloadTaskWithURL:[NSURL URLWithString:urlString] fileName:fileName andSavedDir:savedDir andHeaders:headers httpMethod:method postBody:body];
             NSString *newTaskId = [self identifierForTask:newTask];
 
             // update memory-cache

@@ -157,6 +157,8 @@ class DownloadWorker(context: Context, params: WorkerParameters) :
             ?: throw IllegalArgumentException("Argument '$ARG_HEADERS' should not be null")
         var isResume: Boolean = inputData.getBoolean(ARG_IS_RESUME, false)
         val timeout: Int = inputData.getInt(ARG_TIMEOUT, 15000)
+        val requestMethod: String = inputData.getString(ARG_METHOD) ?: "GET"
+        val requestBody: String? = inputData.getString(ARG_POST_BODY)
         debug = inputData.getBoolean(ARG_DEBUG, false)
         step = inputData.getInt(ARG_STEP, 10)
         ignoreSsl = inputData.getBoolean(ARG_IGNORESSL, false)
@@ -203,7 +205,7 @@ class DownloadWorker(context: Context, params: WorkerParameters) :
             log("exists file for " + filename + "automatic resuming...")
         }
         return try {
-            downloadFile(applicationContext, url, savedDir, filename, headers, isResume, timeout)
+            downloadFile(applicationContext, url, savedDir, filename, headers, isResume, timeout, requestMethod, requestBody)
             cleanUp()
             dbHelper = null
             taskDao = null
@@ -257,7 +259,9 @@ class DownloadWorker(context: Context, params: WorkerParameters) :
         filename: String?,
         headers: String,
         isResume: Boolean,
-        timeout: Int
+        timeout: Int,
+        requestMethod: String,
+        body: String?
     ) {
         var actualFilename = filename
         var url = fileURL
@@ -307,13 +311,35 @@ class DownloadWorker(context: Context, params: WorkerParameters) :
                     }
                 }
                 log("Open connection to $url")
+                log("POST Body: $body")
                 httpConn.connectTimeout = timeout
                 httpConn.readTimeout = timeout
                 httpConn.instanceFollowRedirects = false // Make the logic below easier to detect redirections
                 httpConn.setRequestProperty("User-Agent", "Mozilla/5.0...")
+                if (requestMethod == "POST") {
+                    httpConn.requestMethod = requestMethod
+                }
+
+                setupHeaders(httpConn, headers)
+
+                if (requestMethod == "POST") {
+                    httpConn.doOutput = true // Needed for POST
+                    // If you want to send POST body data, you can write to output stream here
+                    val postData: String? = body
+                    if (!postData.isNullOrEmpty()) {
+                        val outputBytes = postData.toByteArray(Charsets.UTF_8)
+                        httpConn.setRequestProperty("Content-Type", "application/json")
+                        httpConn.setRequestProperty("Content-Length", outputBytes.size.toString())
+                        val os: OutputStream = httpConn.outputStream
+                        os.write(outputBytes)
+                        os.flush()
+                        os.close()
+                    }
+                }
+
 
                 // setup request headers if it is set
-                setupHeaders(httpConn, headers)
+
                 // try to continue downloading a file from its partial downloaded data.
                 if (isResume) {
                     downloadedBytes = setupPartialDownloadedDataHeader(httpConn, actualFilename, savedDir)
@@ -844,6 +870,8 @@ class DownloadWorker(context: Context, params: WorkerParameters) :
         const val ARG_STEP = "step"
         const val ARG_SAVE_IN_PUBLIC_STORAGE = "save_in_public_storage"
         const val ARG_IGNORESSL = "ignoreSsl"
+        const val ARG_METHOD = "method"
+        const val ARG_POST_BODY = "body"
         private val TAG = DownloadWorker::class.java.simpleName
         private const val BUFFER_SIZE = 4096
         private const val CHANNEL_ID = "FLUTTER_DOWNLOADER_NOTIFICATION"

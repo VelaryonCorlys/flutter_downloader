@@ -95,6 +95,8 @@ class FlutterDownloader {
   static Future<String?> enqueue({
     required String url,
     required String savedDir,
+    String? method,
+    String? body,
     String? fileName,
     Map<String, String> headers = const {},
     bool showNotification = true,
@@ -111,6 +113,8 @@ class FlutterDownloader {
       final taskId = await _channel.invokeMethod<String>('enqueue', {
         'url': url,
         'saved_dir': savedDir,
+        'method': method,
+        'body': body,
         'file_name': fileName,
         'headers': jsonEncode(headers),
         'show_notification': showNotification,
